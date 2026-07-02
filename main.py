@@ -49,6 +49,7 @@ BASE_URL = os.getenv("BASE_URL", "https://costvalve.cloud")
 # SSRF 防护 (S2)
 # ============================================================
 ALLOWED_UPSTREAM_DOMAINS = {
+    "ark.cn-beijing.volces.com",
     "api.deepseek.com",
     "dashscope.aliyuncs.com",
     "api.openai.com",
@@ -153,6 +154,13 @@ async def lifespan(app: FastAPI):
 
     # 初始化数据库
     db = init_db(cfg.db_path)
+
+    # 初始化动态定价数据
+    try:
+        from core.pricing_dynamic import ensure_pricing_file
+        ensure_pricing_file()
+    except Exception as e:
+        logger.warning(f"动态定价初始化失败: {e}")
 
     # 初始化邮件服务
     init_resend()
@@ -735,3 +743,53 @@ if __name__ == "__main__":
         reload=cfg.debug,
         log_level="info",
     )
+
+# ============================================================
+# 动态定价接口
+# ============================================================
+
+@app.get("/v1/pricing")
+async def get_pricing_info():
+    """获取所有供应商定价信息（公开接口）"""
+    from core.pricing_dynamic import get_pricing, get_all_pricing_summary
+    data = get_pricing()
+    return {
+        "version": data.get("version", "unknown"),
+        "updated_at": data.get("updated_at", ""),
+        "providers": get_all_pricing_summary(),
+        "detail": {k: {
+            "name": v.get("name"),
+            "has_peak_valley": v.get("has_peak_valley"),
+            "peak_hours": v.get("peak_hours"),
+            "peak_multiplier": v.get("peak_multiplier"),
+            "models": v.get("models")
+        } for k, v in data.get("providers", {}).items()}
+    }
+
+@app.get("/v1/schedule")
+async def get_schedule_status(provider: str = "deepseek", api_key_info: dict = Depends(verify_api_key)):
+    """获取当前调度状态（需认证）"""
+    from core.pricing_dynamic import get_scheduling_status, is_peak_time, get_next_offpeak
+    status = get_scheduling_status(provider)
+    return status
+
+@app.post("/api/admin/pricing")
+async def update_pricing(request: Request):
+    """更新供应商定价（需管理员认证）"""
+    # 验证管理员密码
+    body = await request.json()
+    password = body.get("password", "")
+    if password != ADMIN_PASSWORD or not ADMIN_PASSWORD:
+        raise HTTPException(status_code=403, detail="管理员认证失败")
+    
+    provider = body.get("provider")
+    pricing_data = body.get("pricing")
+    if not provider or not pricing_data:
+        raise HTTPException(status_code=400, detail="缺少 provider 或 pricing 参数")
+    
+    from core.pricing_dynamic import update_provider_pricing, reload_pricing
+    success = update_provider_pricing(provider, pricing_data)
+    if success:
+        reload_pricing()
+        return {"status": "ok", "message": f"供应商 {provider} 定价已更新"}
+    raise HTTPException(status_code=500, detail="定价更新失败")
