@@ -123,6 +123,50 @@ class AppConfig:
                 models=["doubao-pro-32k", "doubao-pro-128k", "doubao-lite-32k"],
                 is_mock=self.mock_mode,
             )
+        # Anthropic Claude
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if anthropic_key or self.mock_mode:
+            self.providers["anthropic"] = ProviderConfig(
+                name="anthropic",
+                base_url=os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
+                api_key=anthropic_key or "mock-key",
+                model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+                models=["claude-opus-4-20250514", "claude-sonnet-4-20250514", "claude-haiku-4-20250514"],
+                is_mock=self.mock_mode,
+            )
+        # Google Gemini
+        google_key = os.getenv("GOOGLE_API_KEY", "")
+        if google_key or self.mock_mode:
+            self.providers["google"] = ProviderConfig(
+                name="google",
+                base_url=os.getenv("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
+                api_key=google_key or "mock-key",
+                model=os.getenv("GOOGLE_MODEL", "gemini-3-flash"),
+                models=["gemini-3.1-pro", "gemini-3.5-flash", "gemini-3-flash", "gemini-3.1-flash-lite"],
+                is_mock=self.mock_mode,
+            )
+                # OpenAI
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+        if openai_key or self.mock_mode:
+            self.providers["openai"] = ProviderConfig(
+                name="openai",
+                base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                api_key=openai_key or "mock-key",
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                models=["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4o", "gpt-4o-mini"],
+                is_mock=self.mock_mode,
+            )
+        # 智谱 GLM
+        glm_key = os.getenv("GLM_API_KEY", "")
+        if glm_key or self.mock_mode:
+            self.providers["glm"] = ProviderConfig(
+                name="glm",
+                base_url=os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
+                api_key=glm_key or "mock-key",
+                model=os.getenv("GLM_MODEL", "glm-5.1"),
+                models=["glm-5.1", "glm-5-turbo", "glm-4.5-air", "glm-4-flash", "glm-4-flashx"],
+                is_mock=self.mock_mode,
+            )
         # 通用 OpenAI 兼容提供商（可自由添加）
         generic_key = os.getenv("GENERIC_API_KEY", "")
         generic_url = os.getenv("GENERIC_BASE_URL", "")
