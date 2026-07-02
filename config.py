@@ -112,6 +112,17 @@ class AppConfig:
                 models=["qwen-turbo", "qwen-plus", "qwen-max"],
                 is_mock=self.mock_mode,
             )
+        # 豆包（字节跳动/火山引擎）
+        doubao_key = os.getenv("DOUBAO_API_KEY", "")
+        if doubao_key or self.mock_mode:
+            self.providers["doubao"] = ProviderConfig(
+                name="doubao",
+                base_url=os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
+                api_key=doubao_key or "mock-key",
+                model=os.getenv("DOUBAO_MODEL", "doubao-pro-32k"),
+                models=["doubao-pro-32k", "doubao-pro-128k", "doubao-lite-32k"],
+                is_mock=self.mock_mode,
+            )
         # 通用 OpenAI 兼容提供商（可自由添加）
         generic_key = os.getenv("GENERIC_API_KEY", "")
         generic_url = os.getenv("GENERIC_BASE_URL", "")
