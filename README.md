@@ -1,188 +1,230 @@
-# ⚡ 节能阀 Cost Valve
+# ⚡ 节能阀
 
-<div align="center">
-
-**AI API 成本优化网关 —— 不改一行代码，立省 50-90% 调用成本**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-%E5%85%8D%E8%B4%B9%E5%85%AC%E6%B5%8B-brightgreen.svg)]()
-[![Uptime](https://img.shields.io/badge/Uptime-99.9%25-blue.svg)]()
-
-**30 秒接入 · 零改造 · 全模型兼容 · 公测免费**
-
-[立即接入](#-30-秒接入) · [在线面板](https://panel.costvalve.cloud) · [API 文档](#-api-参考)
-
-</div>
+**AI 调用成本优化代理 —— 花 1 分钱，省 10 块钱**
 
 ---
 
-## 🤔 这是什么？
+## 这是什么？
 
-一句话：**架在你的 AI 应用和模型供应商之间的智能代理层。**
+节能阀是一个 API 代理层（纯阀门），架在你的 AI 应用和模型供应商之间。
 
-你原来调 DeepSeek、OpenAI、通义千问……只需要把 `base_url` 换成节能阀的地址，**代码一个字不用改**。
+你原来调 DeepSeek、OpenAI、Claude、Gemini、GLM，只需要把 `base_url` 改成节能阀的地址，**代码一个字不用改**。
 
-节能阀自动帮你做三件事：
+节能阀自动帮你做四件事：
+- **缓存优化**：相同问题不重复计费，命中缓存直接返回
+- **前缀压缩**：自动合并重复上下文，砍掉冗余 token
+- **峰谷调度**：追踪所有供应商的价格变动，非紧急任务自动安排在价格低谷执行
+- **用量看板**：实时显示你省了多少钱
 
-| 能力 | 效果 |
-|------|------|
-| 🗄️ 智能缓存 | 相同问题不重复计费，命中缓存直接返回，**省 90%+** |
-| 📦 前缀压缩 | 自动合并重复上下文，砍掉冗余 token |
-| ⏰ 峰谷调度 | 根据供应商实时定价自动调度，非紧急任务排到低峰执行，**再省 50%** |
-| 📊 用量看板 | 实时显示每次调用花了多少、省了多少 |
-
-> **🎉 当前限时免费：所有功能无限量使用，不收任何费用。**
+**每次调用只收 ¥0.01 过路费，每月免费 1000 次。**
 
 ---
 
-## 🚀 30 秒接入
+## 30 秒接入
 
-### 方式一：复制发给你的 AI（最省事）
+### 方式一：发给你的 AI（推荐）
 
-> 👇 点击代码块右上角复制，完整粘贴给你正在用的 AI 助手，它会自动帮你完成接入。
+把下面这段话完整复制，粘贴给你正在用的 AI 智能体：
 
 ```
-请为我的项目接入「节能阀」API 代理网关。
+请为我的 AI 应用接入「节能阀」API 代理。
 
-操作步骤：
-1. 注册账户（POST 请求）：
-   URL: https://api.costvalve.cloud/api/register
-   Headers: Content-Type: application/json
-   Body: {"email": "我的邮箱地址", "name": "可选名称"}
-   → 返回 api_key，记下来
+步骤：
+1. 用这个地址注册账户（如果已有账户跳过）：
+   POST https://api.costvalve.cloud/api/register
+   Content-Type: application/json
+   Body: {"email": "我的邮箱", "name": "可选名称"}
 
-2. 修改项目的 base_url 为：
-   https://api.costvalve.cloud/v1
+2. 把项目的 base_url 改为：https://api.costvalve.cloud/v1
 
-3. 在每次请求的 headers 中加入：
-   Authorization: Bearer {上一步返回的 api_key}
-   X-Upstream-Key: {我原来的模型 API 密钥}
-   X-Upstream-URL: {我原来的模型 API 地址，如 https://api.deepseek.com}
+3. 在请求头加上：
+   Authorization: Bearer {注册返回的api_key}
+   X-Upstream-Key: 我原来的模型API密钥
+   X-Upstream-URL: 我原来的模型API地址
 
-4. 接入完成后告诉我：「节能阀已接入」
-
-管理面板：https://panel.costvalve.cloud（可查看用量和节省明细）
-文档：https://github.com/HDY-Ezio/cost-valve
+4. 接好后告诉我：节能阀已接入，API Key 是 xxx，
+   面板地址 https://panel.costvalve.cloud
 ```
 
 ### 方式二：手动改 3 行配置
 
-**改之前：**
 ```python
+# 原来
 base_url = "https://api.deepseek.com/v1"
 headers = {"Authorization": "Bearer sk-xxxx"}
-```
 
-**改之后：**
-```python
+# 改成
 base_url = "https://api.costvalve.cloud/v1"
 headers = {
-    "Authorization": "Bearer 你的节能阀Key",   # 注册后邮件收到
-    "X-Upstream-Key": "sk-xxxx",               # 你原来的模型密钥
-    "X-Upstream-URL": "https://api.deepseek.com"  # 你原来的模型地址
+    "Authorization": "Bearer 你的节能阀API-Key",
+    "X-Upstream-Key": "sk-xxxx",
+    "X-Upstream-URL": "https://api.deepseek.com"
 }
 ```
 
-就这么多，完事。
+就这么多。完事。
 
 ---
 
-## 💰 价格
+## 核心能力
+
+| 能力 | 说明 | 效果 |
+|------|------|------|
+| **精确缓存** | 完全相同的请求直接返回缓存 | 省 100% token 费 |
+| **语义缓存** | 相似问题命中缓存（相似度 > 95%） | 省 90%+ token 费 |
+| **前缀压缩** | 自动合并重复 system prompt 和上下文 | 省 30-60% 输入 token |
+| **峰谷调度** | 追踪价格变动，低价时段/等级自动执行 | 省 50% 调用费 |
+| **智能路由** | 根据任务复杂度自动选择性价比最高的模型 | 省 50-80% 调用费 |
+| **用量看板** | 实时余额、节省金额、每日趋势 | 成本完全透明 |
+
+---
+
+## 峰谷调度 —— 跟着价格走
+
+节能阀的核心设计理念：**不看时间，只看 token 单价**。
+
+不管供应商用什么方式调价，节能阀都能适配——调度器本质上只比较每个 token 的实时价格，谁便宜就排给谁：
+
+| 供应商调价方式 | 节能阀如何适配 |
+|--------------|--------------|
+| **DeepSeek 按时段**：高峰 2x（9-12、14-18 点） | 非紧急任务自动排到夜间低谷，省 50% |
+| **OpenAI/Claude/Gemini 按等级**：Batch 异步半价 | 异步任务自动走 Batch 通道，省 50% |
+| **任意供应商降价/涨价** | 管理员 API 更新价格 JSON，即时生效，调度自动切换最优供应商 |
+
+---
+
+## 价格
 
 | 项目 | 价格 |
 |------|------|
-| 免费额度 | 1,000 次/月 |
+| 免费额度 | 1000 次/月 |
 | 超出后 | ¥0.01/次 |
 | 缓存节省 | 平均 90%+ |
 
-> **🎉 公测期间全部免费、无限量使用，不限时。** 后续恢复正式价格会提前通知。
-
-**不碰 token、不付上游费用、只在你省钱后才收费。**
+**不碰 token，不付上游费用，只收过路费。**
 
 ---
 
-## 🤖 支持所有 OpenAI 兼容模型
+## 支持模型（7 供应商 · 26 模型）
 
-任何兼容 OpenAI 格式的模型都能直接接入：
+### 🇨🇳 国内供应商
 
-| 供应商 | 状态 |
-|--------|------|
-| DeepSeek | ✅ |
-| OpenAI / GPT | ✅ |
-| 通义千问 (阿里云) | ✅ |
-| 智谱 GLM | ✅ |
-| 月之暗面 Kimi | ✅ |
-| 百川 | ✅ |
-| 其他 OpenAI 兼容 API | ✅ |
+**DeepSeek**（支持峰谷定价）
+| 模型 | 正常价（元/百万tokens） | 高峰价 |
+|------|----------------------|--------|
+| deepseek-v4-pro | 输入 3.0 / 输出 6.0 | 输入 6.0 / 输出 12.0 |
+| deepseek-v4-flash | 输入 1.0 / 输出 2.0 | 输入 2.0 / 输出 4.0 |
 
-只需提供原始模型的 API 地址和密钥，节能阀透明转发，不改变任何行为。
+**智谱 GLM**（国内编程首选，开发者生态第一梯队）
+| 模型 | 输入（元/百万tokens） | 输出 |
+|------|----------------------|------|
+| glm-5.1 | 6.0 | 24.0 |
+| glm-5-turbo | 5.0 | 22.0 |
+| glm-4.5-air | 0.8 | 2.0 |
+| glm-4-flash | **免费** | **免费** |
+| glm-4-flashx | 0.1 | 0.1 |
+
+**通义千问（阿里云）**
+| 模型 | 输入 | 输出 |
+|------|------|------|
+| qwen3.7-max | 2.5 | 7.5 |
+| qwen3.7-plus | 0.4 | 1.6 |
+| qwen3.7-flash | 0.03 | 0.06 |
+
+**豆包（字节跳动）**
+| 模型 | 输入 | 输出 |
+|------|------|------|
+| doubao-pro-32k | 0.8 | 2.0 |
+| doubao-pro-128k | 5.0 | 9.0 |
+| doubao-lite-32k | 0.3 | 0.6 |
+
+### 🌍 海外供应商
+
+**OpenAI**（Batch/Flex 模式 50% off）
+| 模型 | 输入（USD/百万tokens） | 输出 |
+|------|----------------------|------|
+| gpt-5.5 | 5.00 | 30.00 |
+| gpt-5.4 | 2.50 | 15.00 |
+| gpt-5.4-mini | 0.75 | 4.50 |
+| gpt-5.4-nano | 0.20 | 1.25 |
+| gpt-4o | 2.50 | 10.00 |
+| gpt-4o-mini | 0.15 | 0.60 |
+
+**Anthropic Claude**（Batch 模式 50% off）
+| 模型 | 输入（USD/百万tokens） | 输出 |
+|------|----------------------|------|
+| claude-opus-4 | 5.00 | 25.00 |
+| claude-sonnet-4 | 3.00 | 15.00 |
+| claude-haiku-4 | 1.00 | 5.00 |
+
+**Google Gemini**（Batch 模式 50% off）
+| 模型 | 输入（USD/百万tokens） | 输出 |
+|------|----------------------|------|
+| gemini-3.1-pro | 2.00 | 12.00 |
+| gemini-3.5-flash | 1.50 | 9.00 |
+| gemini-3-flash | 0.50 | 3.00 |
+| gemini-3.1-flash-lite | 0.25 | 1.50 |
+
+> 以上为 2026 年 7 月最新定价，可通过管理 API 实时更新。
+> 所有 OpenAI 兼容格式的模型均支持接入，不限于以上列表。
 
 ---
 
-## 📊 在线面板
+## 面板功能
 
-打开 [panel.costvalve.cloud](https://panel.costvalve.cloud) 即可查看：
+- 📊 实时余额和用量
+- 💰 节省看板（缓存命中、前缀优化、峰谷调度各省了多少）
+- 📈 峰谷状态实时展示
+- 📧 邮箱绑定（找回 Key 用）
+- 🔔 余量提醒
+- 📅 每日趋势
 
-- 💰 实时余额和当月用量
-- 📈 每日调用趋势图
-- 🗄️ 缓存命中率 & 节省明细
-- 📦 前缀压缩节省统计
-- 🔔 余量提醒设置
-- 📧 邮箱绑定（找回 Key）
+面板地址：https://panel.costvalve.cloud
 
 ---
 
-## 🏗️ 技术架构
+## 技术架构
 
 ```
-┌──────────┐     ┌──────────────────┐     ┌──────────────┐
-│ 你的应用  │────▶│   节能阀网关      │────▶│  模型供应商   │
-│          │     │                  │     │  DeepSeek    │
-│ base_url │     │  • 智能缓存      │     │  OpenAI      │
-│ 改一行   │     │  • 前缀压缩      │     │  通义千问    │
-│ 就搞定   │     │  • 峰谷调度      │     │  豆包 ...    │
-│          │     │  • 用量统计      │     │              │
-└──────────┘     └──────────────────┘     └──────────────┘
+                        ┌─── 精确缓存（Redis/SQLite）
+                        ├─── 语义缓存（向量相似度 > 95%）
+你的应用 → 节能阀 ──────├─── 前缀优化器（自动压缩重复上下文）
+              │         ├─── 峰谷调度器（追踪价格 → 低价时段/通道执行）
+              │         └─── 智能路由（按任务复杂度选模型）
+              │
+              ├──→ DeepSeek（峰谷 2x）
+              ├──→ 智谱 GLM（免费模型可用）
+              ├──→ 通义千问
+              ├──→ 豆包
+              ├──→ OpenAI（Batch 50% off）
+              ├──→ Claude（Batch 50% off）
+              └──→ Gemini（Batch 50% off）
 ```
 
-- **协议兼容**：完全兼容 OpenAI API 格式，无需修改业务代码
-- **高性能**：Python + FastAPI + Cython 编译核心模块
-- **数据安全**：API Key SHA256 哈希存储，不保存明文
+- Python + FastAPI
+- SQLite 持久化
+- Cython 编译核心模块（二进制部署）
+- 动态定价 JSON 热加载（无需重启）
+- 开源协议：MIT
 
 ---
 
-## 📖 API 参考
+## API 端点
 
-| 端点 | 说明 |
-|------|------|
-| `POST /api/register` | 注册（邮箱即账号，Key 邮件发送） |
-| `POST /api/recover` | 找回 API Key |
-| `POST /v1/chat/completions` | Chat 接口（OpenAI 兼容） |
-| `GET /v1/models` | 可用模型列表 |
-| `GET /v1/usage` | 用量统计 |
-| `GET /v1/savings` | 节省明细 |
-
-**请求头说明：**
-
-| Header | 必填 | 说明 |
-|--------|------|------|
-| `Authorization` | ✅ | `Bearer {节能阀API-Key}` |
-| `X-Upstream-Key` | ✅ | 你原来的模型 API 密钥 |
-| `X-Upstream-URL` | ❌ | 模型 API 地址（默认 DeepSeek） |
+| 端点 | 认证 | 说明 |
+|------|------|------|
+| `GET /v1/pricing` | 无需 | 查询所有供应商实时定价 |
+| `GET /v1/schedule?provider=xxx` | API Key | 查看指定供应商峰谷状态和调度建议 |
+| `POST /api/admin/pricing` | 管理员密码 | 更新供应商定价，即时生效 |
 
 ---
 
-## 📬 联系我们
+## 联系我们
 
-- 微信：`xingmu_2026`
-- 邮箱：hdyabcd@163.com
+手机/微信：13789007691
 
 ---
 
-<div align="center">
-
-**[立即接入](#-30-秒接入)** · [在线面板](https://panel.costvalve.cloud) · [GitHub](https://github.com/HDY-Ezio/cost-valve)
-
-<b>节能阀</b> · 花 1 分，省 10 块
-
-</div>
+<p align="center">
+  <b>节能阀</b> · 花 1 分，省 10 块
+</p>
