@@ -25,11 +25,15 @@ from config import ProviderConfig
 from core.scheduler import get_scheduling_info
 from core.usage import get_dashboard
 from core.budget import check_budget, check_quota
+from core.license import validate_license, get_license_info
 from db.database import init_db, get_db
-from email_sender import init_resend, send_api_key_email
+from email_sender import init as init_resend, send_api_key_email
 
 # 管理员密码（环境变量覆盖）
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "xingmu2026")
+
+# 服务基础地址（环境变量覆盖，避免硬编码IP）
+BASE_URL = os.getenv("BASE_URL", "http://154.8.211.17/gateway")
 
 # ============================================================
 # Logging
@@ -48,21 +52,27 @@ logger = logging.getLogger("ai-cost-optimizer")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用启动/关闭时的操作"""
+    # 许可证验证（最先执行）
+    if not validate_license():
+        logger.critical("🚫 许可证验证失败，服务拒绝启动！")
+        raise RuntimeError("许可证验证失败，请检查 LICENSE_KEY 环境变量")
+
     # 启动
     cfg = get_config()
     logger.info("=" * 60)
-    logger.info("  AI Cost Optimizer - Starting up")
+    logger.info("  节能阀 AI Cost Optimizer - Starting up")
     logger.info(f"  Mock mode: {cfg.mock_mode}")
     logger.info(f"  Providers: {list(cfg.providers.keys())}")
     logger.info(f"  Free quota: {cfg.free_quota_monthly}/month")
     logger.info(f"  Price per call: ¥{cfg.price_per_call}")
+    logger.info(f"  Base URL: {BASE_URL}")
     logger.info("=" * 60)
 
     # 初始化数据库
     db = init_db(cfg.db_path)
 
     # 初始化邮件服务
-    init_resend(os.getenv("RESEND_API_KEY", ""))
+    init_resend()
 
     # 初始化提供商注册中心
     registry.initialize()
@@ -390,6 +400,16 @@ async def api_admin_recharge(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.get("/api/admin/license")
+async def api_admin_license():
+    """查看许可证状态"""
+    try:
+        info = get_license_info()
+        return JSONResponse(content=info)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 # ============================================================
 # 注册 & 找回 & 绑定邮箱
 # ============================================================
@@ -419,7 +439,7 @@ async def api_register(request: Request):
         raw_key = existing.get("raw_key", "")
         if not raw_key:
             return JSONResponse(status_code=500, content={"error": "该账户未存储密钥，请联系管理员"})
-        sent = send_api_key_email(email, raw_key, "http://154.8.211.17/gateway/portal")
+        sent = send_api_key_email(email, raw_key, f"{BASE_URL}/portal")
         if sent:
             return JSONResponse(content={
                 "message": "您已注册过，API Key 已重新发送到您的邮箱",
@@ -436,7 +456,7 @@ async def api_register(request: Request):
         db.update_contact(result["key_id"], email)
         db.update_raw_key(result["key_id"], raw_key)
 
-        sent = send_api_key_email(email, raw_key, "http://154.8.211.17/gateway/portal")
+        sent = send_api_key_email(email, raw_key, f"{BASE_URL}/portal")
         return JSONResponse(content={
             "message": "注册成功！API Key 已发送到您的邮箱",
             "email": email,
@@ -469,7 +489,7 @@ async def api_recover(request: Request):
     if not raw_key:
         return JSONResponse(status_code=500, content={"error": "该账户未存储密钥，请联系管理员"})
 
-    sent = send_api_key_email(email, raw_key, "http://154.8.211.17/gateway/portal")
+    sent = send_api_key_email(email, raw_key, f"{BASE_URL}/portal")
     if sent:
         return JSONResponse(content={
             "message": "API Key 已发送到您的邮箱",
@@ -500,7 +520,7 @@ async def api_update_email(request: Request, api_key_info: dict = Depends(verify
     raw_key = api_key_info.get("raw_key", "")
     if raw_key:
         db.update_raw_key(api_key_info["key_id"], raw_key)
-        send_api_key_email(email, raw_key, "http://154.8.211.17/gateway/portal")
+        send_api_key_email(email, raw_key, f"{BASE_URL}/portal")
 
     return JSONResponse(content={
         "message": "邮箱绑定成功",
@@ -518,8 +538,12 @@ def _ensure_default_key():
         from db.database import get_db
         db = get_db()
 
-        # 创建默认 key
-        default_key_raw = "aco-default-dev-key-2026"
+        # 从环境变量读取默认Key（生产环境不应使用）
+        default_key_raw = os.environ.get("DEFAULT_KEY_RAW", "")
+        if not default_key_raw:
+            logger.info("未配置 DEFAULT_KEY_RAW，跳过默认Key创建")
+            return
+            
         key_hash = hash_api_key(default_key_raw)
 
         key_info = db.get_api_key(key_hash)

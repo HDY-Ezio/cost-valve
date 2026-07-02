@@ -10,12 +10,12 @@ from email.mime.multipart import MIMEMultipart
 
 logger = logging.getLogger(__name__)
 
-# Resend SMTP 配置
-SMTP_HOST = "smtp.resend.com"
-SMTP_PORT = 587
+# Resend SMTP 配置（全部从环境变量读取）
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.resend.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = "resend"  # Resend SMTP 用户名固定为 "resend"
-FROM_EMAIL = "onboarding@resend.dev"  # 临时发件人（Resend 免费域名）
-FROM_NAME = "节能阀"
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "onboarding@resend.dev")
+FROM_NAME = os.environ.get("FROM_NAME", "节能阀")
 
 # 是否已初始化
 _initialized = False

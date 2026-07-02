@@ -191,6 +191,7 @@ async def process_chat_completion(request: ChatCompletionRequest,
         # Step 8: 构建转发请求并执行
         # ============================================================
         forward_payload = _build_forward_payload(optimized_messages, model_name, request)
+        actual_provider = upstream_adapter.name
 
         try:
             result = await upstream_adapter.chat_completion(forward_payload)
@@ -448,6 +449,7 @@ async def process_stream_chat_completion(request: ChatCompletionRequest,
 
         # 构建转发请求
         forward_payload = _build_forward_payload(optimized_messages, model_name, request)
+        actual_provider = upstream_adapter.name
 
         # ============================================================
         # 流式转发（核心：逐 chunk 透传）
