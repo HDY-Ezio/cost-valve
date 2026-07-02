@@ -53,6 +53,9 @@ ALLOWED_UPSTREAM_DOMAINS = {
     "api.deepseek.com",
     "dashscope.aliyuncs.com",
     "api.openai.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com",
+    "open.bigmodel.cn",
 }
 
 def validate_upstream_url(url: str) -> bool:
