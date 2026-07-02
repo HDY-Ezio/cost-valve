@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>节能阀 - 用户面板</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #FFF8F0; color: #333; min-height: 100vh; }
+.container { max-width: 480px; margin: 0 auto; padding: 20px 16px; }
+h1 { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 16px; color: #FF6B35; }
+
+/* 标签导航 */
+.tabs { display: flex; gap: 0; margin-bottom: 20px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tab-btn { flex: 1; padding: 12px 0; text-align: center; font-size: 14px; font-weight: 500; color: #999; background: none; border: none; cursor: pointer; transition: all 0.2s; border-bottom: 2px solid transparent; }
+.tab-btn.active { color: #FF6B35; border-bottom-color: #FF6B35; background: #FFF8F0; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.card-title { font-size: 14px; color: #999; margin-bottom: 12px; }
+.balance { font-size: 36px; font-weight: 700; color: #FF6B35; }
+.balance span { font-size: 16px; font-weight: 400; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat-item { text-align: center; }
+.stat-value { font-size: 20px; font-weight: 600; color: #333; }
+.stat-label { font-size: 12px; color: #999; margin-top: 4px; }
+.recharge-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+.recharge-btn { background: #FFF0E6; border: 2px solid #FF6B35; color: #FF6B35; border-radius: 8px; padding: 12px 0; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.recharge-btn:hover, .recharge-btn.active { background: #FF6B35; color: #fff; }
+.recharge-desc { text-align: center; font-size: 12px; color: #999; margin-top: 2px; }
+.input-group { margin-bottom: 16px; }
+.input-group label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+.input-group input, .input-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; transition: border 0.2s; font-family: inherit; }
+.input-group input:focus, .input-group textarea:focus { border-color: #FF6B35; }
+.btn-primary { width: 100%; padding: 12px; background: #FF6B35; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-small { padding: 8px 16px; font-size: 13px; width: auto; }
+.login-section { text-align: center; padding-top: 40px; }
+.login-section p { color: #999; font-size: 14px; margin-bottom: 20px; }
+.hidden { display: none; }
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 24px; border-radius: 8px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; }
+.toast.show { opacity: 1; }
+.quota-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.quota-fill { height: 100%; background: #FF6B35; border-radius: 4px; transition: width 0.3s; }
+.contact { text-align: center; margin-top: 20px; }
+.alert-setting { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.alert-setting input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+.alert-setting input:focus { border-color: #FF6B35; }
+.alert-setting button { padding: 8px 16px; background: #FF6B35; color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.recharge-info { margin-top: 16px; text-align: center; padding: 16px; background: #FFF8F0; border-radius: 8px; }
+.recharge-info p { font-size: 13px; color: #666; margin-bottom: 4px; }
+.recharge-info .wechat { font-size: 18px; font-weight: 600; color: #FF6B35; }
+
+/* 邮箱绑定 */
+.email-bind { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.email-bind input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; }
+.email-bind input:focus { border-color: #FF6B35; }
+.email-bind button { padding: 8px 16px; background: #FF6B35; color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.email-status { font-size: 12px; color: #999; margin-top: 8px; }
+
+/* 接入指南 */
+.guide-step { margin-bottom: 16px; }
+.guide-step h3 { font-size: 14px; color: #FF6B35; margin-bottom: 8px; }
+.guide-step p { font-size: 13px; color: #666; line-height: 1.6; }
+.code-block { background: #1e1e1e; color: #d4d4d4; padding: 14px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; position: relative; margin: 8px 0; }
+.copy-btn { position: absolute; top: 8px; right: 8px; background: #444; color: #fff; border: none; border-radius: 4px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+.copy-btn:hover { background: #666; }
+.note-box { background: #FFF0E6; border-left: 3px solid #FF6B35; padding: 12px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 13px; color: #666; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔧 节能阀</h1>
+
+  <!-- 标签导航 -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('account')">账户</button>
+    <button class="tab-btn" onclick="switchTab('savings')">节省看板</button>
+    <button class="tab-btn" onclick="switchTab('recover')">找回密码</button>
+    <button class="tab-btn" onclick="switchTab('guide')">开发者接入</button>
+  </div>
+
+  <!-- ==================== 账户 Tab ==================== -->
+  <div id="tab-account" class="tab-content active">
+    <!-- 登录区 -->
+    <div id="loginSection" class="login-section">
+      <div class="card">
+        <p>输入你的 API Key 查看账户</p>
+        <div class="input-group">
+          <input type="password" id="apiKeyInput" placeholder="aco-xxxxxxxx" autocomplete="off">
+        </div>
+        <button class="btn-primary" onclick="login()">查看账户</button>
+      </div>
+    </div>
+
+    <!-- 账户区 -->
+    <div id="accountSection" class="hidden">
+      <div class="card">
+        <div class="card-title">账户余额</div>
+        <div class="balance" id="balanceDisplay">--<span> 元</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">本月用量</div>
+        <div class="stats">
+          <div class="stat-item">
+            <div class="stat-value" id="usedCalls">--</div>
+            <div class="stat-label">已用次数</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="remainCalls">--</div>
+            <div class="stat-label">免费剩余</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="callsToday">--</div>
+            <div class="stat-label">今日调用</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="cacheRate">--</div>
+            <div class="stat-label">缓存命中率</div>
+          </div>
+        </div>
+        <div class="quota-bar"><div class="quota-fill" id="quotaFill" style="width:0%"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">绑定邮箱</div>
+        <p style="font-size:13px;color:#666;">绑定邮箱后可通过邮箱找回 API Key</p>
+        <div class="email-bind">
+          <input type="email" id="emailInput" placeholder="输入邮箱地址">
+          <button onclick="bindEmail()">绑定</button>
+        </div>
+        <p class="email-status" id="emailStatus"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">余量提醒</div>
+        <p style="font-size:13px;color:#666;">免费额度剩余次数低于设定值时，日志会记录提醒通知</p>
+        <div class="alert-setting">
+          <input type="number" id="alertInput" placeholder="输入提醒阈值（次）" min="0">
+          <button onclick="saveAlert()">保存</button>
+        </div>
+        <p style="font-size:12px;color:#999;margin-top:8px;" id="alertStatus"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">充值</div>
+        <p style="font-size:13px;color:#666;margin-bottom:8px;">0.01 元/次，充值后永久有效</p>
+        <div class="recharge-grid">
+          <div>
+            <button class="recharge-btn" onclick="selectAmount(10, this)">10元</button>
+            <div class="recharge-desc">1000次</div>
+          </div>
+          <div>
+            <button class="recharge-btn" onclick="selectAmount(50, this)">50元</button>
+            <div class="recharge-desc">5000次</div>
+          </div>
+          <div>
+            <button class="recharge-btn" onclick="selectAmount(100, this)">100元</button>
+            <div class="recharge-desc">10000次</div>
+          </div>
+        </div>
+        <div id="rechargeInfo" class="hidden">
+          <div class="recharge-info">
+            <p>添加客服微信，备注你的 API Key</p>
+            <p class="wechat">xingmukeji</p>
+            <p style="margin-top:8px;">转账后即时到账</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="contact">
+        <button onclick="logout()" style="background:none;border:1px solid #ddd;padding:8px 20px;border-radius:8px;color:#999;cursor:pointer;font-size:13px;">切换 Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 节省看板 Tab ==================== -->
+  <div id="tab-savings" class="tab-content">
+    <div id="savingsLoginPrompt" class="card" style="text-align:center;">
+      <p style="color:#999;font-size:14px;margin-bottom:12px;">请先在「账户」页登录后查看</p>
+    </div>
+    <div id="savingsSection" class="hidden">
+      <div class="card">
+        <div class="card-title">本月总节省</div>
+        <div class="balance" id="totalSaved">¥--</div>
+        <div style="font-size:12px;color:#999;margin-top:4px;" id="savingsPeriod"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">节省明细</div>
+        <div class="stats">
+          <div class="stat-item">
+            <div class="stat-value" id="gwCacheSaved">¥--</div>
+            <div class="stat-label">网关缓存节省</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="upstreamCacheSaved">¥--</div>
+            <div class="stat-label">上游缓存节省</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="prefixOptSaved">¥--</div>
+            <div class="stat-label">前缀优化节省</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="cacheHitRate">--%</div>
+            <div class="stat-label">网关缓存命中率</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">缓存命中统计</div>
+        <div class="stats">
+          <div class="stat-item">
+            <div class="stat-value" id="totalCallsSavings">--</div>
+            <div class="stat-label">总调用次数</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="gwCacheHits">--</div>
+            <div class="stat-label">网关缓存命中</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="exactHits">--</div>
+            <div class="stat-label">精确匹配</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="semanticHits">--</div>
+            <div class="stat-label">语义匹配</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">近 7 天趋势</div>
+        <div id="dailyTrend" style="font-size:13px;color:#666;">
+          <p style="text-align:center;color:#999;">加载中...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 找回密码 Tab ==================== -->
+  <div id="tab-recover" class="tab-content">
+    <div class="card">
+      <div class="card-title">通过邮箱找回 API Key</div>
+      <p style="font-size:13px;color:#666;margin-bottom:16px;">输入注册时使用的邮箱，API Key 将发送到该邮箱</p>
+      <div class="input-group">
+        <label>注册邮箱</label>
+        <input type="email" id="recoverEmail" placeholder="your@email.com">
+      </div>
+      <button class="btn-primary" onclick="recoverKey()">发送 API Key 到邮箱</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">还没有账户？</div>
+      <p style="font-size:13px;color:#666;margin-bottom:12px;">注册即可获得 API Key，每月免费 1000 次调用</p>
+      <div class="input-group">
+        <label>邮箱地址</label>
+        <input type="email" id="regEmail" placeholder="your@email.com">
+      </div>
+      <div class="input-group">
+        <label>名称（可选）</label>
+        <input type="text" id="regName" placeholder="给你的 Key 起个名字">
+      </div>
+      <button class="btn-primary" onclick="register()">注册并获取 API Key</button>
+    </div>
+  </div>
+
+  <!-- ==================== 开发者接入 Tab ==================== -->
+  <div id="tab-guide" class="tab-content">
+    <div class="card">
+      <div class="card-title">一键接入指南</div>
+      <p style="font-size:13px;color:#666;margin-bottom:16px;">复制下面的指令，发给你的 AI 智能体，它会自动完成接入配置</p>
+
+      <div class="guide-step">
+        <h3>第一步：注册获取 Key</h3>
+        <p>在「找回密码」标签页输入邮箱注册，API Key 会自动发送到你的邮箱。</p>
+      </div>
+
+      <div class="guide-step">
+        <h3>第二步：一键接入</h3>
+        <p>复制以下指令，粘贴给你的 AI 智能体：</p>
+        <div class="code-block" id="instructBlock">请为我的 AI 应用接入「节能阀」API 优化代理，按以下步骤操作：
+
+1. 调用注册接口创建账户：
+POST http://154.8.211.17/gateway/api/register
+Content-Type: application/json
+{"email": "用户的邮箱地址", "name": "可选的名称"}
+
+2. 保存返回的 api_key
+
+3. 配置 API 调用：
+- base_url 改为：http://154.8.211.17/gateway/v1
+- 请求头增加：
+  Authorization: Bearer {保存的 api_key}
+  X-Upstream-Key: 你的原始模型 API 密钥
+  X-Upstream-URL: 你的原始模型 API 地址（如 https://api.deepseek.com）
+
+4. 完成后告知用户：
+- 节能阀 API 已接入
+- API Key：{api_key}（重要，请妥善保管）
+- 账户面板：http://154.8.211.17/gateway/portal
+- 每月免费 1000 次，超出后 0.01 元/次<button class="copy-btn" onclick="copyInstruct()">复制</button></div>
+      </div>
+
+      <div class="guide-step">
+        <h3>第三步：手动接入（可选）</h3>
+        <p>如果智能体不支持自动配置，手动修改以下参数即可：</p>
+        <div class="code-block" id="configBlock">API 地址：http://154.8.211.17/gateway/v1/chat/completions
+请求头：
+  Authorization: Bearer 你的节能阀API-Key
+  X-Upstream-Key: 你的原始模型密钥
+  X-Upstream-URL: 原始模型API地址
+
+示例（DeepSeek）：
+  X-Upstream-Key: sk-xxxx
+  X-Upstream-URL: https://api.deepseek.com
+
+示例（OpenAI）：
+  X-Upstream-Key: sk-xxxx
+  X-Upstream-URL: https://api.openai.com<button class="copy-btn" onclick="copyConfig()">复制</button></div>
+      </div>
+
+      <div class="note-box">
+        <strong>💡 说明</strong><br>
+        • 同一个 API Key 可以用于多个智能体/项目，共享余额<br>
+        • 每月免费 1000 次调用，超出后 0.01 元/次<br>
+        • 支持任意 OpenAI 兼容格式的模型<br>
+        • 忘记 Key？通过邮箱即可找回
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentKey = '';
+let selectedAmount = 0;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// 标签切换
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// 登录
+async function login() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { showToast('请输入 API Key'); return; }
+  currentKey = key;
+  await refreshAccount();
+}
+
+function logout() {
+  currentKey = '';
+  document.getElementById('loginSection').classList.remove('hidden');
+  document.getElementById('accountSection').classList.add('hidden');
+}
+
+async function refreshAccount() {
+  try {
+    const resp = await fetch('/gateway/api/account', {
+      headers: { 'Authorization': 'Bearer ' + currentKey }
+    });
+    if (!resp.ok) {
+      showToast('API Key 无效或已过期');
+      return;
+    }
+    const data = await resp.json();
+    document.getElementById('loginSection').classList.add('hidden');
+    document.getElementById('accountSection').classList.remove('hidden');
+
+    document.getElementById('balanceDisplay').innerHTML =
+      data.balance.toFixed(2) + '<span> 元</span>';
+
+    const freeRemaining = Math.max(0, data.monthly_quota - data.calls_used);
+    document.getElementById('usedCalls').textContent = data.calls_used;
+    document.getElementById('remainCalls').textContent = freeRemaining;
+    document.getElementById('callsToday').textContent = data.calls_today;
+    document.getElementById('cacheRate').textContent = data.cache_hit_rate + '%';
+
+    const pct = Math.min(100, (data.calls_used / data.monthly_quota) * 100);
+    document.getElementById('quotaFill').style.width = pct + '%';
+
+    document.getElementById('alertInput').value = data.alert_threshold || '';
+    document.getElementById('alertStatus').textContent =
+      data.alert_threshold > 0
+        ? '当前设置：剩余 ' + data.alert_threshold + ' 次时提醒'
+        : '未设置提醒';
+
+    // 显示已绑定邮箱
+    if (data.contact) {
+      document.getElementById('emailInput').value = data.contact;
+      document.getElementById('emailStatus').textContent = '已绑定：' + data.contact;
+    } else {
+      document.getElementById('emailInput').value = '';
+      document.getElementById('emailStatus').textContent = '未绑定邮箱';
+    }
+
+    // 加载节省看板数据
+    refreshSavings();
+  } catch (e) {
+    showToast('网络错误，请重试');
+  }
+}
+
+// 节省看板
+async function refreshSavings() {
+  try {
+    const resp = await fetch('/gateway/v1/savings', {
+      headers: { 'Authorization': 'Bearer ' + currentKey }
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    document.getElementById('savingsLoginPrompt').classList.add('hidden');
+    document.getElementById('savingsSection').classList.remove('hidden');
+
+    const savings = data.savings || {};
+    document.getElementById('totalSaved').textContent = '\u00a5' + (savings.total || 0).toFixed(4);
+    document.getElementById('savingsPeriod').textContent = data.period || '\u672c\u6708';
+    document.getElementById('gwCacheSaved').textContent = '\u00a5' + (savings.gateway_cache || 0).toFixed(4);
+    document.getElementById('upstreamCacheSaved').textContent = '\u00a5' + (savings.upstream_cache || 0).toFixed(4);
+    document.getElementById('prefixOptSaved').textContent = '\u00a5' + (savings.prefix_optimize || 0).toFixed(4);
+    document.getElementById('cacheHitRate').textContent = (data.cache_hit_rate || 0) + '%';
+
+    document.getElementById('totalCallsSavings').textContent = data.total_calls || 0;
+    document.getElementById('gwCacheHits').textContent = data.gateway_cache_hits || 0;
+    document.getElementById('exactHits').textContent = data.exact_cache_hits || 0;
+    document.getElementById('semanticHits').textContent = data.semantic_cache_hits || 0;
+
+    // 每日趋势
+    const trend = data.daily_trend || [];
+    const trendEl = document.getElementById('dailyTrend');
+    if (trend.length === 0) {
+      trendEl.innerHTML = '<p style="text-align:center;color:#999;">\u6682\u65e0\u6570\u636e</p>';
+    } else {
+      let html = '<table style="width:100%;border-collapse:collapse;">';
+      html += '<tr style="border-bottom:1px solid #eee;font-size:12px;color:#999;">';
+      html += '<th style="padding:6px 0;text-align:left;">\u65e5\u671f</th>';
+      html += '<th style="text-align:center;">\u8c03\u7528</th>';
+      html += '<th style="text-align:center;">\u7f13\u5b58\u547d\u4e2d</th>';
+      html += '<th style="text-align:right;">\u8282\u7701</th></tr>';
+      trend.forEach(d => {
+        html += '<tr style="border-bottom:1px solid #f5f5f5;">';
+        html += '<td style="padding:6px 0;">' + d.day + '</td>';
+        html += '<td style="text-align:center;">' + d.calls + '</td>';
+        html += '<td style="text-align:center;">' + d.cache_hits + '</td>';
+        html += '<td style="text-align:right;color:#FF6B35;font-weight:600;">\u00a5' + (d.saved || 0).toFixed(4) + '</td>';
+        html += '</tr>';
+      });
+      html += '</table>';
+      trendEl.innerHTML = html;
+    }
+  } catch (e) {
+    // silent
+  }
+}
+
+// 绑定邮箱
+async function bindEmail() {
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email || !email.includes('@')) { showToast('请输入有效邮箱'); return; }
+  if (!currentKey) { showToast('请先登录'); return; }
+  try {
+    const resp = await fetch('/gateway/api/update-email', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + currentKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email: email })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast('邮箱绑定成功');
+      document.getElementById('emailStatus').textContent = '已绑定：' + email;
+    } else {
+      showToast(data.error || '绑定失败');
+    }
+  } catch (e) {
+    showToast('网络错误');
+  }
+}
+
+// 找回 Key
+async function recoverKey() {
+  const email = document.getElementById('recoverEmail').value.trim();
+  if (!email || !email.includes('@')) { showToast('请输入有效邮箱'); return; }
+  try {
+    const resp = await fetch('/gateway/api/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast('API Key 已发送到你的邮箱');
+    } else {
+      showToast(data.error || '发送失败');
+    }
+  } catch (e) {
+    showToast('网络错误');
+  }
+}
+
+// 注册
+async function register() {
+  const email = document.getElementById('regEmail').value.trim();
+  const name = document.getElementById('regName').value.trim();
+  if (!email || !email.includes('@')) { showToast('请输入有效邮箱'); return; }
+  try {
+    const resp = await fetch('/gateway/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, name: name })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showToast('注册成功！请查收邮箱');
+    } else {
+      showToast(data.error || '注册失败');
+    }
+  } catch (e) {
+    showToast('网络错误');
+  }
+}
+
+// 余量提醒
+async function saveAlert() {
+  const val = document.getElementById('alertInput').value.trim();
+  if (!val && val !== '0') { showToast('请输入提醒次数'); return; }
+  try {
+    const resp = await fetch('/gateway/api/settings', {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Bearer ' + currentKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ alert_threshold: parseInt(val) })
+    });
+    if (resp.ok) {
+      showToast('提醒设置已保存');
+      document.getElementById('alertStatus').textContent =
+        parseInt(val) > 0 ? '当前设置：剩余 ' + val + ' 次时提醒' : '已关闭提醒';
+    } else {
+      showToast('保存失败');
+    }
+  } catch (e) {
+    showToast('网络错误');
+  }
+}
+
+// 充值
+function selectAmount(amount, btn) {
+  selectedAmount = amount;
+  document.querySelectorAll('.recharge-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('rechargeInfo').classList.remove('hidden');
+}
+
+// 复制接入指令
+function copyInstruct() {
+  const block = document.getElementById('instructBlock');
+  const text = block.innerText.replace('复制', '').trim();
+  navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'));
+}
+
+function copyConfig() {
+  const block = document.getElementById('configBlock');
+  const text = block.innerText.replace('复制', '').trim();
+  navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'));
+}
+
+// 回车登录
+document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+</script>
+</body>
+</html>

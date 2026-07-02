@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+data/*.db
+.env
+.env.*
+htmlcov/
+.coverage
+deploy_*.sh
+deploy_*.tar.gz
+paste_deploy.sh
