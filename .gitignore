@@ -8,3 +8,9 @@ htmlcov/
 deploy_*.sh
 deploy_*.tar.gz
 paste_deploy.sh
+data/
+tests/
+docs/
+方案文档/
+*.html
+!static/portal.html
