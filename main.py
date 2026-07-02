@@ -6,7 +6,11 @@ import sys
 import os
 import logging
 import time
+import re
+import ipaddress
+from collections import defaultdict
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 # 确保项目根目录在 path 中
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -29,11 +33,89 @@ from core.license import validate_license, get_license_info
 from db.database import init_db, get_db
 from email_sender import init as init_resend, send_api_key_email
 
-# 管理员密码（环境变量覆盖）
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "xingmu2026")
+# ============================================================
+# 安全配置
+# ============================================================
 
-# 服务基础地址（环境变量覆盖，避免硬编码IP）
-BASE_URL = os.getenv("BASE_URL", "http://154.8.211.17/gateway")
+# S1: 管理员密码 - 禁止硬编码默认值，必须通过环境变量设置
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+if not ADMIN_PASSWORD:
+    logging.warning("⚠️ ADMIN_PASSWORD 未设置，管理员接口将拒绝所有请求")
+
+# 服务基础地址
+BASE_URL = os.getenv("BASE_URL", "https://costvalve.cloud")
+
+# ============================================================
+# SSRF 防护 (S2)
+# ============================================================
+ALLOWED_UPSTREAM_DOMAINS = {
+    "api.deepseek.com",
+    "dashscope.aliyuncs.com",
+    "api.openai.com",
+}
+
+def validate_upstream_url(url: str) -> bool:
+    """校验上游 URL，阻止 SSRF 攻击"""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        # 阻止内网 IP
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        except ValueError:
+            pass  # 不是 IP 地址，是域名
+        # 白名单域名放行
+        if hostname in ALLOWED_UPSTREAM_DOMAINS:
+            return True
+        # 未知公网域名也放行（允许用户对接新厂商），但内网已拦截
+        return True
+    except Exception:
+        return False
+
+# ============================================================
+# 速率限制 (S3) - 轻量内存实现
+# ============================================================
+_rate_limit_store = defaultdict(list)
+_rate_limit_lock_time = [0.0]
+
+RATE_LIMIT_CLEAN_INTERVAL = 300  # 5分钟清理一次过期记录
+
+def check_rate_limit(key: str, limit: int, window: int) -> bool:
+    """检查速率限制。返回 True=超限应拒绝, False=正常放行"""
+    now = time.time()
+    # 定期清理过期记录
+    if now - _rate_limit_lock_time[0] > RATE_LIMIT_CLEAN_INTERVAL:
+        expired = [k for k, v in _rate_limit_store.items()
+                   if not v or v[-1] < now - window * 2]
+        for k in expired:
+            del _rate_limit_store[k]
+        _rate_limit_lock_time[0] = now
+    # 清理该 key 的过期记录
+    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if t > now - window]
+    if len(_rate_limit_store[key]) >= limit:
+        return True
+    _rate_limit_store[key].append(now)
+    return False
+
+# 速率限制配置
+RATE_LIMIT_REGISTER = (5, 60)       # 注册: 5次/分钟
+RATE_LIMIT_RECOVER = (5, 60)        # 找回: 5次/分钟
+RATE_LIMIT_CHAT = (120, 60)         # API调用: 120次/分钟
+
+# ============================================================
+# 输入清洗 (W3)
+# ============================================================
+def sanitize_input(text: str) -> str:
+    """移除 HTML 标签和危险字符"""
+    text = re.sub(r'<[^>]*>', '', text)
+    text = re.sub(r'["\'<>]', '', text)
+    return text.strip()
 
 # ============================================================
 # Logging
@@ -66,6 +148,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Free quota: {cfg.free_quota_monthly}/month")
     logger.info(f"  Price per call: ¥{cfg.price_per_call}")
     logger.info(f"  Base URL: {BASE_URL}")
+    logger.info(f"  Admin password: {'✅ configured' if ADMIN_PASSWORD else '❌ not set'}")
     logger.info("=" * 60)
 
     # 初始化数据库
@@ -89,25 +172,34 @@ async def lifespan(app: FastAPI):
 # ============================================================
 # FastAPI App
 # ============================================================
+# W1: 生产环境禁用 Swagger/OpenAPI
+cfg = get_config()
 app = FastAPI(
     title="AI Cost Optimizer",
     description="OpenAI 兼容 API 代理，自动优化 AI API 调用成本",
     version="1.0.0-mvp",
     lifespan=lifespan,
+    docs_url="/docs" if cfg.debug else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if cfg.debug else None,
 )
 
-# CORS
+# S6: CORS 修复 - 指定允许的域名，不再使用 *
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://costvalve.cloud",
+        "https://panel.costvalve.cloud",
+        "https://api.costvalve.cloud",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Upstream-Key", "X-Upstream-URL"],
 )
 
 
 # ============================================================
-# Auth Dependency
+# Auth Dependencies
 # ============================================================
 async def verify_api_key(authorization: str = Header(None)) -> dict:
     """验证 API Key（从 Authorization header）"""
@@ -116,7 +208,6 @@ async def verify_api_key(authorization: str = Header(None)) -> dict:
             "error": {"message": "Missing Authorization header", "type": "auth_error"}
         })
 
-    # 支持 "Bearer sk-xxx" 和 "sk-xxx" 两种格式
     key = authorization
     if key.startswith("Bearer "):
         key = key[7:]
@@ -130,12 +221,27 @@ async def verify_api_key(authorization: str = Header(None)) -> dict:
     return key_info
 
 
+async def verify_admin(request: Request):
+    """验证管理员密码（从 request body 的 password 字段）"""
+    try:
+        body = await request.json()
+        password = body.get("password", "")
+    except Exception:
+        raise HTTPException(status_code=403, detail={"error": "管理员认证失败"})
+
+    if not ADMIN_PASSWORD:
+        raise HTTPException(status_code=403, detail={"error": "管理员未配置"})
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=403, detail={"error": "管理员密码错误"})
+    return body
+
+
 # ============================================================
 # 核心 API 端点 (OpenAI 兼容)
 # ============================================================
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest,
+async def chat_completions(request: Request, body: ChatCompletionRequest,
                            api_key_info: dict = Depends(verify_api_key),
                            x_upstream_key: str = Header(None, alias="X-Upstream-Key"),
                            x_upstream_url: str = Header(None, alias="X-Upstream-URL")):
@@ -146,25 +252,39 @@ async def chat_completions(request: ChatCompletionRequest,
       X-Upstream-Key：用户自己的上游 API 密钥（有则用用户的，无则走服务端默认）
       X-Upstream-URL：用户指定的上游厂商地址（配合 X-Upstream-Key 使用）
     """
-    # 必须带上游密钥，否则拒绝——阀门不替人付费
+    # S3: 速率限制
+    client_ip = request.client.host if request.client else "unknown"
+    if check_rate_limit(f"chat:{client_ip}", *RATE_LIMIT_CHAT):
+        return JSONResponse(status_code=429, content={
+            "error": {"message": "请求过于频繁，请稍后再试", "type": "rate_limit_exceeded"}
+        })
+
+    # 必须带上游密钥
     if not x_upstream_key:
         return JSONResponse(status_code=400, content={
             "error": {"message": "Missing X-Upstream-Key header. Please provide your upstream API key.", "type": "missing_upstream_key"}
         })
+
+    # S2: SSRF 防护 - 校验上游 URL
     upstream_url = x_upstream_url or "https://api.deepseek.com"
+    if not validate_upstream_url(upstream_url):
+        return JSONResponse(status_code=400, content={
+            "error": {"message": "Invalid X-Upstream-URL. Private IPs and non-HTTP schemes are not allowed.", "type": "invalid_upstream_url"}
+        })
+
     upstream_adapter = ProviderAdapter(ProviderConfig(
         name="user-upstream",
         base_url=upstream_url,
         api_key=x_upstream_key,
-        model=request.model or "deepseek-chat",
+        model=body.model or "deepseek-chat",
         is_mock=False,
     ))
 
     try:
-        if request.stream:
-            return await process_stream_chat_completion(request, api_key_info, upstream_adapter=upstream_adapter)
+        if body.stream:
+            return await process_stream_chat_completion(body, api_key_info, upstream_adapter=upstream_adapter)
         else:
-            return await process_chat_completion(request, api_key_info, upstream_adapter=upstream_adapter)
+            return await process_chat_completion(body, api_key_info, upstream_adapter=upstream_adapter)
     except HTTPException:
         raise
     except Exception as e:
@@ -186,7 +306,6 @@ async def root():
         "service": "AI Cost Optimizer",
         "version": "1.0.0-mvp",
         "status": "running",
-        "docs": "/docs",
         "api_base": "/v1",
     }
 
@@ -197,15 +316,42 @@ async def health():
     return {"status": "ok", "timestamp": time.time()}
 
 
+# S5: API Key 创建 - 需要认证（API Key 或管理员密码）
 @app.post("/v1/api-keys")
-async def api_create_key(request: Request):
-    """创建新的 API Key"""
+async def api_create_key(request: Request,
+                         authorization: str = Header(None)):
+    """创建新的 API Key（需要认证）"""
+    # 先尝试 API Key 认证
+    authenticated = False
+    if authorization:
+        key = authorization
+        if key.startswith("Bearer "):
+            key = key[7:]
+        key_info = authenticate(key)
+        if key_info:
+            authenticated = True
+
+    # 再尝试管理员密码认证
+    if not authenticated:
+        try:
+            body = await request.json()
+            password = body.get("password", "")
+            if ADMIN_PASSWORD and password == ADMIN_PASSWORD:
+                authenticated = True
+        except Exception:
+            pass
+
+    if not authenticated:
+        return JSONResponse(status_code=401, content={
+            "error": {"message": "需要 API Key 或管理员密码", "type": "auth_error"}
+        })
+
     try:
         body = await request.json() if request.headers.get("content-type") else {}
     except Exception:
         body = {}
 
-    name = body.get("name", "")
+    name = sanitize_input(body.get("name", ""))
     monthly_quota = body.get("monthly_quota", 1000)
     monthly_budget = body.get("monthly_budget", 100.0)
 
@@ -231,7 +377,7 @@ async def api_usage(api_key_info: dict = Depends(verify_api_key)):
 
 @app.get("/v1/savings")
 async def api_savings(api_key_info: dict = Depends(verify_api_key)):
-    """获取缓存节省详情：上游缓存命中、前缀优化、网关缓存节省明细"""
+    """获取缓存节省详情"""
     try:
         dashboard = get_savings_dashboard(api_key_info["key_id"])
         return JSONResponse(content=dashboard)
@@ -259,19 +405,18 @@ async def api_schedule_info():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+# W6: Provider 信息 - 隐藏 is_mock 状态
 @app.get("/v1/providers")
-async def api_providers():
-    """获取已注册的提供商列表"""
+async def api_providers(api_key_info: dict = Depends(verify_api_key)):
+    """获取已注册的提供商列表（需要认证）"""
     try:
         providers = registry.get_all()
         result = {}
         for name, adapter in providers.items():
             result[name] = {
                 "name": adapter.name,
-                "base_url": adapter.base_url,
                 "default_model": adapter.default_model,
                 "models": adapter.config.models,
-                "is_mock": adapter.is_mock,
             }
         return JSONResponse(content={"providers": result})
     except Exception as e:
@@ -305,7 +450,7 @@ async def api_models(api_key_info: dict = Depends(verify_api_key)):
 
 
 # ============================================================
-# 用户面板 & 充值接口
+# 用户面板 & 管理接口
 # ============================================================
 
 PORTAL_HTML_PATH = os.path.join(os.path.dirname(__file__), "static", "portal.html")
@@ -321,7 +466,7 @@ async def portal_page():
 
 @app.get("/api/account")
 async def api_account(api_key_info: dict = Depends(verify_api_key)):
-    """获取账户信息：余额、用量、提醒设置"""
+    """获取账户信息"""
     try:
         db = get_db()
         cfg = get_config()
@@ -351,7 +496,7 @@ async def api_account(api_key_info: dict = Depends(verify_api_key)):
 
 @app.put("/api/settings")
 async def api_settings(request: Request, api_key_info: dict = Depends(verify_api_key)):
-    """更新用户设置（提醒阈值等）"""
+    """更新用户设置"""
     try:
         body = await request.json()
         key_id = api_key_info["key_id"]
@@ -369,20 +514,14 @@ async def api_settings(request: Request, api_key_info: dict = Depends(verify_api
 
 
 @app.post("/api/admin/recharge")
-async def api_admin_recharge(request: Request):
-    """管理员充值接口"""
+async def api_admin_recharge(body: dict = Depends(verify_admin)):
+    """管理员充值接口（需要管理员密码）"""
     try:
-        body = await request.json()
-        password = body.get("password", "")
-        if password != ADMIN_PASSWORD:
-            return JSONResponse(status_code=403, content={"error": "管理员密码错误"})
-
         api_key_raw = body.get("api_key", "")
         amount = float(body.get("amount", 0))
         if amount <= 0:
             return JSONResponse(status_code=400, content={"error": "充值金额必须大于0"})
 
-        # 通过 API key 原文找到 key_id
         key_hash = hash_api_key(api_key_raw)
         db = get_db()
         key_info = db.get_api_key(key_hash)
@@ -396,16 +535,26 @@ async def api_admin_recharge(request: Request):
             "message": f"充值成功：+{amount:.2f}元",
             "new_balance": round(new_balance, 2),
         })
+    except HTTPException:
+        raise
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.get("/api/admin/license")
-async def api_admin_license():
-    """查看许可证状态"""
+# S4: Admin 接口 - 需要管理员认证
+@app.post("/api/admin/license")
+async def api_admin_license(request: Request):
+    """查看许可证状态（需要管理员密码）"""
     try:
+        body = await request.json()
+        password = body.get("password", "")
+        if not ADMIN_PASSWORD or password != ADMIN_PASSWORD:
+            return JSONResponse(status_code=403, content={"error": "管理员密码错误"})
+
         info = get_license_info()
         return JSONResponse(content=info)
+    except HTTPException:
+        raise
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -414,19 +563,28 @@ async def api_admin_license():
 # 注册 & 找回 & 绑定邮箱
 # ============================================================
 
+# S3: 注册接口加速率限制
+# W3: 输入清洗
 @app.post("/api/register")
 async def api_register(request: Request):
     """
     开放注册：传入 email 即可自动创建 API Key，Key 通过邮件发送。
     如果邮箱已注册，直接重新发送原 Key。
     """
+    # S3: 速率限制
+    client_ip = request.client.host if request.client else "unknown"
+    if check_rate_limit(f"register:{client_ip}", *RATE_LIMIT_REGISTER):
+        return JSONResponse(status_code=429, content={
+            "error": {"message": "请求过于频繁，请稍后再试", "type": "rate_limit_exceeded"}
+        })
+
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(status_code=400, content={"error": "无效的 JSON"})
 
-    email = body.get("email", "").strip()
-    name = body.get("name", "").strip()
+    email = sanitize_input(body.get("email", ""))
+    name = sanitize_input(body.get("name", ""))
     if not email or "@" not in email:
         return JSONResponse(status_code=400, content={"error": "请提供有效的邮箱地址"})
 
@@ -435,7 +593,6 @@ async def api_register(request: Request):
     # 检查是否已注册
     existing = db.find_key_by_contact(email)
     if existing:
-        # 已注册，重新发送 Key
         raw_key = existing.get("raw_key", "")
         if not raw_key:
             return JSONResponse(status_code=500, content={"error": "该账户未存储密钥，请联系管理员"})
@@ -452,7 +609,6 @@ async def api_register(request: Request):
     try:
         result = create_key(name=name, contact=email)
         raw_key = result["api_key"]
-        # 更新联系方式和原始 Key
         db.update_contact(result["key_id"], email)
         db.update_raw_key(result["key_id"], raw_key)
 
@@ -466,17 +622,23 @@ async def api_register(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+# S3: 找回接口加速率限制
 @app.post("/api/recover")
 async def api_recover(request: Request):
-    """
-    通过邮箱找回 API Key
-    """
+    """通过邮箱找回 API Key"""
+    # S3: 速率限制
+    client_ip = request.client.host if request.client else "unknown"
+    if check_rate_limit(f"recover:{client_ip}", *RATE_LIMIT_RECOVER):
+        return JSONResponse(status_code=429, content={
+            "error": {"message": "请求过于频繁，请稍后再试", "type": "rate_limit_exceeded"}
+        })
+
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(status_code=400, content={"error": "无效的 JSON"})
 
-    email = body.get("email", "").strip()
+    email = sanitize_input(body.get("email", ""))
     if not email or "@" not in email:
         return JSONResponse(status_code=400, content={"error": "请提供有效的邮箱地址"})
 
@@ -501,22 +663,19 @@ async def api_recover(request: Request):
 
 @app.post("/api/update-email")
 async def api_update_email(request: Request, api_key_info: dict = Depends(verify_api_key)):
-    """
-    为已有 API Key 绑定/更换邮箱
-    """
+    """为已有 API Key 绑定/更换邮箱"""
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(status_code=400, content={"error": "无效的 JSON"})
 
-    email = body.get("email", "").strip()
+    email = sanitize_input(body.get("email", ""))
     if not email or "@" not in email:
         return JSONResponse(status_code=400, content={"error": "请提供有效的邮箱地址"})
 
     db = get_db()
     db.update_contact(api_key_info["key_id"], email)
 
-    # 如果有 raw_key，顺便发一封确认邮件
     raw_key = api_key_info.get("raw_key", "")
     if raw_key:
         db.update_raw_key(api_key_info["key_id"], raw_key)
@@ -538,12 +697,11 @@ def _ensure_default_key():
         from db.database import get_db
         db = get_db()
 
-        # 从环境变量读取默认Key（生产环境不应使用）
         default_key_raw = os.environ.get("DEFAULT_KEY_RAW", "")
         if not default_key_raw:
             logger.info("未配置 DEFAULT_KEY_RAW，跳过默认Key创建")
             return
-            
+
         key_hash = hash_api_key(default_key_raw)
 
         key_info = db.get_api_key(key_hash)
@@ -553,7 +711,7 @@ def _ensure_default_key():
                 key_id=uuid.uuid4().hex[:16],
                 key_hash=key_hash,
                 name="Default Dev Key",
-                monthly_quota=10000,  # 开发用，给多一些
+                monthly_quota=10000,
                 monthly_budget=1000.0,
             )
             logger.info(f"Default API key created: {default_key_raw}")
