@@ -796,3 +796,129 @@ async def update_pricing(request: Request):
         reload_pricing()
         return {"status": "ok", "message": f"供应商 {provider} 定价已更新"}
     raise HTTPException(status_code=500, detail="定价更新失败")
+
+
+# ==================== Admin: 全局用量统计 ====================
+@app.get("/api/admin/stats")
+async def admin_stats(x_admin_key: str = Header(default="")):
+    """管理员全局用量统计 - 每日调用量、收入、模型分布"""
+    if x_admin_key != ADMIN_PASSWORD:
+        return JSONResponse(status_code=401, content={"error": "管理员认证失败"})
+    
+    try:
+        import sqlite3
+        from datetime import datetime, timedelta
+        
+        db_path = os.path.join(os.path.dirname(__file__), "data", "ai_cost_optimizer.db")
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        
+        today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        # 今日统计
+        cur.execute("""
+            SELECT COUNT(*), 
+                   COALESCE(SUM(total_tokens), 0),
+                   COALESCE(SUM(actual_cost), 0),
+                   COALESCE(SUM(proxy_fee), 0),
+                   COALESCE(SUM(saved_cost), 0)
+            FROM usage_records 
+            WHERE created_at LIKE ?
+        """, (f"{today}%",))
+        today_stats = cur.fetchone()
+        
+        # 昨日统计
+        cur.execute("""
+            SELECT COUNT(*), 
+                   COALESCE(SUM(total_tokens), 0),
+                   COALESCE(SUM(actual_cost), 0),
+                   COALESCE(SUM(proxy_fee), 0),
+                   COALESCE(SUM(saved_cost), 0)
+            FROM usage_records 
+            WHERE created_at LIKE ?
+        """, (f"{yesterday}%",))
+        yesterday_stats = cur.fetchone()
+        
+        # 总计统计
+        cur.execute("""
+            SELECT COUNT(*), 
+                   COALESCE(SUM(total_tokens), 0),
+                   COALESCE(SUM(actual_cost), 0),
+                   COALESCE(SUM(proxy_fee), 0),
+                   COALESCE(SUM(saved_cost), 0)
+            FROM usage_records
+        """)
+        total_stats = cur.fetchone()
+        
+        # 模型使用分布
+        cur.execute("""
+            SELECT model, COUNT(*), COALESCE(SUM(total_tokens), 0), 
+                   COALESCE(SUM(actual_cost), 0), COALESCE(SUM(proxy_fee), 0)
+            FROM usage_records
+            GROUP BY model
+            ORDER BY COUNT(*) DESC
+        """)
+        model_stats = [{"model": r[0], "calls": r[1], "tokens": r[2], "cost": round(r[3], 6), "revenue": round(r[4], 6)} for r in cur.fetchall()]
+        
+        # 供应商分布
+        cur.execute("""
+            SELECT provider, COUNT(*), COALESCE(SUM(total_tokens), 0),
+                   COALESCE(SUM(actual_cost), 0)
+            FROM usage_records
+            GROUP BY provider
+            ORDER BY COUNT(*) DESC
+        """)
+        provider_stats = [{"provider": r[0], "calls": r[1], "tokens": r[2], "cost": round(r[3], 6)} for r in cur.fetchall()]
+        
+        # API Keys 统计
+        cur.execute("SELECT COUNT(*) FROM api_keys WHERE is_active = 1")
+        active_keys = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM api_keys WHERE used_this_month > 0")
+        keys_with_usage = cur.fetchone()[0]
+        
+        # 近7天趋势
+        cur.execute("""
+            SELECT substr(created_at, 1, 10) as day, 
+                   COUNT(*), COALESCE(SUM(total_tokens), 0),
+                   COALESCE(SUM(actual_cost), 0), COALESCE(SUM(proxy_fee), 0)
+            FROM usage_records
+            WHERE created_at >= date("now", "-7 days")
+            GROUP BY day
+            ORDER BY day
+        """)
+        daily_trend = [{"date": r[0], "calls": r[1], "tokens": r[2], "cost": round(r[3], 6), "revenue": round(r[4], 6)} for r in cur.fetchall()]
+        
+        conn.close()
+        
+        return JSONResponse(content={
+            "date": today,
+            "today": {
+                "calls": today_stats[0],
+                "tokens": today_stats[1],
+                "cost": round(today_stats[2], 6),
+                "revenue": round(today_stats[3], 6),
+                "saved": round(today_stats[4], 6)
+            },
+            "yesterday": {
+                "calls": yesterday_stats[0],
+                "tokens": yesterday_stats[1],
+                "cost": round(yesterday_stats[2], 6),
+                "revenue": round(yesterday_stats[3], 6),
+                "saved": round(yesterday_stats[4], 6)
+            },
+            "total": {
+                "calls": total_stats[0],
+                "tokens": total_stats[1],
+                "cost": round(total_stats[2], 6),
+                "revenue": round(total_stats[3], 6),
+                "saved": round(total_stats[4], 6)
+            },
+            "active_keys": active_keys,
+            "keys_with_usage": keys_with_usage,
+            "model_stats": model_stats,
+            "provider_stats": provider_stats,
+            "daily_trend": daily_trend
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
