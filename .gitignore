@@ -71,3 +71,5 @@ build/
 deploy_*.sh
 deploy_*.tar.gz
 paste_deploy.sh
+# 商业版代码（开源仓库不包含）
+ai-cost-optimizer/
