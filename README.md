@@ -1,60 +1,79 @@
-# 节能阀 Cost Valve
+<div align="center">
 
-> 🚰 就像水龙头一样控制你的 AI 成本
->
-> 在 AI API 前面加一层智能网关，重复请求直接返回缓存，不用每次烧 token。
-> 真实场景省 30%-70%，改一行配置就能用。
+# 💸 Cost Valve — AI API Cost Optimization Gateway
 
----
+**Slash your LLM API costs by 30%-70% with zero code changes**
 
-## ✨ 核心能力
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Stars](https://img.shields.io/github/stars/HDY-Ezio/cost-valve?style=social)](https://github.com/HDY-Ezio/cost-valve/stargazers)
 
-| 能力 | 说明 | 预期降本 |
-|------|------|---------|
-| **精确缓存** | 完全相同的请求直接返回缓存结果，零 token 消耗 | 20-40% |
-| **前缀优化** | 自动整理请求结构，最大化命中上游 LLM 的 prompt cache | 10-30% |
-| **Prompt 瘦身** | 去除冗余空白、重复内容，减少输入 token | 5-15% |
-| **用量看板** | 实时统计调用量、缓存命中率、节省 token 数 | - |
-
-> 💡 **商业版**额外提供：语义缓存（相同含义不同表述也能命中）、智能路由（选最便宜的模型）、级联推理（从便宜模型逐层尝试）、多租户管理等高级能力。
+**[English](README.md) | [中文](README.zh-CN.md)**
 
 ---
 
-## 🚀 快速开始
+</div>
 
-### 方式一：Docker 一键启动
+## 🎯 Why Cost Valve?
 
-```bash
-# 1. 克隆项目
-git clone https://github.com/HDY-Ezio/cost-valve.git
-cd cost-valve
+Every AI team is bleeding money on API calls. The same questions get asked hundreds of times, and you pay for every token — every single time.
 
-# 2. 配置你的 API Key
-cp .env.example .env
-# 编辑 .env，填入至少一个模型厂商的 API Key
-# 例如：DEEPSEEK_API_KEY=sk-xxxx
+**Cost Valve sits between your app and LLM APIs, automatically catching redundant requests before they burn through your budget.**
 
-# 3. 启动
-docker-compose up -d
-
-# 4. 验证
-curl http://localhost:8000/health
+```
+Before: App → LLM API (pay for every call)
+After:  App → Cost Valve → LLM API (cache hits = free)
 ```
 
-### 方式二：Python 直接运行
+### ✨ Key Results
+
+- **30-70% cost reduction** in real-world scenarios
+- **One-line integration** — just change your base_url
+- **Zero learning curve** — fully OpenAI-compatible API
+- **Real-time dashboard** — see exactly how much you're saving
+
+---
+
+## ⚡ Core Features
+
+| Feature | Description | Cost Savings |
+|---------|-------------|-------------|
+| 🎯 **Exact Cache** | Identical prompts return cached results instantly | 20-40% |
+| 🧠 **Prefix Optimization** | Automatically restructures prompts to maximize upstream provider cache hits | 10-30% |
+| ✂️ **Prompt Slimming** | Removes redundant whitespace, duplicates, and boilerplate | 5-15% |
+| 📊 **Usage Dashboard** | Real-time stats: calls, cache hit rate, tokens saved | — |
+| 🔌 **Multi-Provider** | DeepSeek, OpenAI, Qwen, GLM, Claude, Gemini, and any OpenAI-compatible API | — |
+| 🐳 **Docker Ready** | One command deployment with docker-compose | — |
+
+---
+
+## 🚀 Quick Start
+
+### Option 1: Docker (Recommended)
+
+```bash
+git clone https://github.com/HDY-Ezio/cost-valve.git
+cd cost-valve
+cp .env.example .env
+# Edit .env and add your API keys
+docker-compose up -d
+```
+
+### Option 2: Python Directly
 
 ```bash
 git clone https://github.com/HDY-Ezio/cost-valve.git
 cd cost-valve
 pip install -r requirements.txt
 cp .env.example .env
-# 编辑 .env 填入 API Key
 python main.py
 ```
 
-### 方式三：零配置试用
+### Option 3: Zero Setup (Pass-through Mode)
 
-不想配置环境变量？每次请求通过 Header 指定上游即可：
+No env vars needed — pass upstream keys via headers on each request:
 
 ```python
 from openai import OpenAI
@@ -66,60 +85,53 @@ client = OpenAI(
 
 response = client.chat.completions.create(
     model="deepseek-chat",
-    messages=[{"role": "user", "content": "你好"}],
+    messages=[{"role": "user", "content": "Hello!"}],
     extra_headers={
-        "X-Upstream-Key": "sk-你的上游Key",
+        "X-Upstream-Key": "sk-your-upstream-key",
         "X-Upstream-URL": "https://api.deepseek.com",
     }
 )
-
-print(response.choices[0].message.content)
 ```
 
 ---
 
-## 🔧 如何接入
-
-**只需改一行：把 base_url 指向节能阀**
-
-```python
-# 原来
-client = OpenAI(api_key="sk-xxx")
-
-# 现在
-client = OpenAI(
-    base_url="http://localhost:8000/v1",
-    api_key="你的节能阀Key",  # 不设置则无需认证
-)
-```
-
-完全兼容 OpenAI API 格式，支持所有主流模型厂商。
-
----
-
-## 🏗️ 架构
+## 🔧 How It Works
 
 ```
-用户请求 → [节能阀 Cost Valve] → LLM 厂商 API
-              ↓
-          精确缓存命中？→ 是 → 直接返回，省 100%
-              ↓ 否
-          前缀优化 → 提高上游缓存命中率
-              ↓
-          转发到上游模型
-              ↓
-          结果写入缓存 + 记录用量
+Client Request
+    ↓
+┌─────────────────────────────────┐
+│    Cost Valve Gateway            │
+│  ┌───────────────────────────┐  │
+│  │ 1. Exact Cache Match?      │  │
+│  │    → YES → return cache    │  │  ← 100% savings
+│  │    → NO → continue         │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 2. Prefix Optimization     │  │  ← Maximize upstream cache
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 3. Prompt Slimming         │  │  ← Reduce token count
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 4. Forward to LLM API      │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 5. Cache result + stats    │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+    ↓
+LLM Provider Response
 ```
 
 ---
 
-## 📊 查看节省效果
+## 📊 See Your Savings
 
 ```bash
 curl http://localhost:8000/v1/usage
 ```
 
-返回示例：
 ```json
 {
   "summary": {
@@ -134,49 +146,73 @@ curl http://localhost:8000/v1/usage
 
 ---
 
-## 🔌 支持的模型厂商
+## 🔌 Supported Providers
 
-- DeepSeek
-- OpenAI
-- 智谱 GLM
-- 通义千问（阿里云百炼）
-- 豆包（火山引擎）
-- Anthropic Claude
-- Google Gemini
-- 任何 OpenAI 兼容格式的 API
-
----
-
-## 🆚 开源版 vs 商业版
-
-| 功能 | 开源版 | 商业版 |
-|------|--------|--------|
-| 精确缓存 | ✅ | ✅ |
-| 前缀优化 | ✅ | ✅ |
-| Prompt 瘦身 | ✅ | ✅ |
-| 用量统计 | ✅ 基础版 | ✅ 高级看板 |
-| 语义缓存 | ❌ | ✅ 向量相似度匹配 |
-| 智能路由 | ❌ | ✅ 多模型择优 |
-| 级联推理 | ❌ | ✅ 逐层尝试 |
-| 多租户管理 | ❌ | ✅ |
-| 高可用部署 | ❌ | ✅ |
-| 技术支持 | 社区 | 专属支持 + SLA |
-
-> 商业版即开即用 SaaS：[costvalve.cloud](https://costvalve.cloud)
+| Provider | Status | Notes |
+|----------|--------|-------|
+| DeepSeek | ✅ Full | Great cache support |
+| OpenAI | ✅ Full | GPT-3.5/4/4o |
+| Zhipu GLM | ✅ Full | GLM-4 series |
+| Qwen (Alibaba) | ✅ Full | Qwen2 series |
+| Doubao (Volcengine) | ✅ Full | |
+| Anthropic Claude | ✅ Full | |
+| Google Gemini | ✅ Full | |
+| Any OpenAI-compatible | ✅ Full | Point base_url to Cost Valve |
 
 ---
 
-## 🤝 贡献
+## 🆚 Open Source vs Commercial
 
-欢迎 Issue 和 PR！
-
-1. Fork 本仓库
-2. 创建你的特性分支
-3. 提交改动
-4. 发起 Pull Request
+| Feature | Open Source | [Cloud SaaS](https://costvalve.cloud) |
+|---------|:-----------:|:-------------------------------------:|
+| Exact Cache | ✅ | ✅ |
+| Prefix Optimization | ✅ | ✅ |
+| Prompt Slimming | ✅ | ✅ |
+| Usage Stats | ✅ Basic | ✅ Advanced Dashboard |
+| **Semantic Cache** | ❌ | ✅ Vector similarity matching |
+| **Smart Routing** | ❌ | ✅ Cheapest model auto-selection |
+| **Cascade Inference** | ❌ | ✅ Try cheap models first |
+| **Multi-Tenant** | ❌ | ✅ Team management |
+| **HA Deployment** | ❌ | ✅ Production-grade |
+| Support | Community | Dedicated + SLA |
 
 ---
 
-## 📄 许可证
+## 🗺️ Roadmap
 
-MIT License - 详见 [LICENSE](LICENSE)
+- [ ] Semantic cache (vector similarity)
+- [ ] Smart routing across providers
+- [ ] Web dashboard with charts
+- [ ] Redis cluster support
+- [ ] Streaming optimization
+- [ ] Rate limiting & budgeting
+- [ ] Kubernetes Helm chart
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a Pull Request
+
+Found a bug? Open an Issue!
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**If this project saves you money, give it a ⭐ Star!**
+
+Made with ❤️ for cost-conscious AI builders.
+
+</div>
