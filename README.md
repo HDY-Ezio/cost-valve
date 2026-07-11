@@ -16,6 +16,41 @@
 
 </div>
 
+---
+
+## ⚡ Try in 30 Seconds (Zero Setup)
+
+No installation needed. Copy this curl command, replace with your API key, and see it work:
+
+```bash
+curl -X POST https://api.costvalve.cloud/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-YOUR_DEEPSEEK_KEY" \
+  -H "X-Upstream-URL: https://api.deepseek.com" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role": "user", "content": "What is cost valve?"}]
+  }'
+```
+
+> 🎯 **1st call**: Normal forwarding, ~1-2 seconds
+>
+> ⚡ **2nd call (same question)**: Cache hit — instant response, **100% token savings**
+
+**Works with your existing API key — no registration, no sign-up.**
+
+### One-Click Python Demo
+
+```bash
+curl -O https://raw.githubusercontent.com/HDY-Ezio/cost-valve/main/examples/quick_demo.py
+# Edit the file, set your API key
+python quick_demo.py
+```
+
+See [`examples/quick_demo.py`](examples/quick_demo.py) for a complete demo that shows cache savings in action.
+
+---
+
 ## 🎯 Why Cost Valve?
 
 Every AI team is bleeding money on API calls. The same questions get asked hundreds of times, and you pay for every token — every single time.
