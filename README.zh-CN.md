@@ -16,6 +16,41 @@
 
 </div>
 
+---
+
+## ⚡ 30 秒快速体验（零部署）
+
+不用装任何东西，复制这行命令，替换成你的 API Key 就能跑：
+
+```bash
+curl -X POST https://api.costvalve.cloud/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-你的DeepSeekKey" \
+  -H "X-Upstream-URL: https://api.deepseek.com" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role": "user", "content": "用一句话介绍节能阀"}]
+  }'
+```
+
+> 🎯 **第一次调用**：正常转发，耗时约 1-2 秒
+>
+> ⚡ **第二次调用同样的问题**：直接命中缓存，几乎零延迟，**省 100% token**
+
+**有自己的 API Key 就能用，不用注册、不用登录。**
+
+### 一键运行 Python Demo
+
+```bash
+curl -O https://raw.githubusercontent.com/HDY-Ezio/cost-valve/main/examples/quick_demo.py
+# 编辑文件，填入你的 API Key
+python quick_demo.py
+```
+
+详见 [`examples/quick_demo.py`](examples/quick_demo.py)，复制改个 Key 就能亲眼看到缓存省钱效果。
+
+---
+
 ## 🎯 为什么需要节能阀？
 
 每个用 AI 的团队都在烧 API 费——同样的问题被问几百遍，每一遍都要全价付 token 钱。
